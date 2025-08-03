@@ -172,6 +172,29 @@ async def handle_button(update: Update, context: CallbackContext) -> None:
     elif callback_data == 'change_rate':
         await change_rate(update, context)
 
+# پروفایل کاربر
+async def profile(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username
+    balance = get_balance(user_id)
+    
+    # دریافت آدرس کیف پول و اطلاعات دیگر
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute('SELECT user_id, username FROM users WHERE user_id = ?', (user_id,))
+    user_info = c.fetchone()
+    conn.close()
+
+    # اطلاعات پروفایل کاربر
+    profile_text = f"پروفایل شما:\n\n"
+    profile_text += f"نام کاربری: {username}\n"
+    profile_text += f"موجودی: {balance} PXT\n"
+    profile_text += f"شناسه کاربری: {user_info[0]}\n"  # نمایش شناسه کاربری
+    profile_text += f"آدرس کیف پول: ناتمام (اضافه کردن امکان ذخیره آدرس کیف پول در آینده)"
+    
+    # ارسال پروفایل به کاربر
+    await update.message.reply_text(profile_text)
+
 # تابع اصلی
 def main():
     create_db()  # ساخت دیتابیس
