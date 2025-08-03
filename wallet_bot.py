@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQ
 TOKEN = "7092562641:AAF58jJ5u_CB6m7Y2803R8Cx9bdfymZgYuA"
 
 # شناسه مدیر اصلی
-ADMIN_PIN = "PiXiT1"
+ADMIN_PIN = "AdminPiXiT"
 
 # ایجاد دیتابیس و جدول برای کاربران، رسیدها، تنظیمات و مدیر اصلی
 def create_db():
@@ -216,4 +216,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
