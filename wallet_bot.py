@@ -1,3 +1,4 @@
+import sqlite3
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 
@@ -87,3 +88,4 @@ async def main():
 if __name__ == '__main__':
     import asyncio
     asyncio.run(main())
+
