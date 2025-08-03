@@ -1,10 +1,9 @@
 import sqlite3
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
-import os
 
-# ====== تنظیمات ======
-TOKEN = os.getenv("API_TOKEN")
+# توکن ربات تلگرام
+TOKEN = "7092562641:AAF58jJ5u_CB6m7Y2803R8Cx9bdfymZgYuA"
 
 # ایجاد دیتابیس و جدول برای کاربران
 def create_db():
