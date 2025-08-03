@@ -158,6 +158,29 @@ async def set_new_rate(update: Update, context: CallbackContext) -> None:
     else:
         await update.message.reply_text("لطفاً یک نرخ معتبر وارد کنید.")
 
+# پروفایل کاربر
+async def profile(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username
+    balance = get_balance(user_id)
+    
+    # دریافت آدرس کیف پول و اطلاعات دیگر
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute('SELECT user_id, username FROM users WHERE user_id = ?', (user_id,))
+    user_info = c.fetchone()
+    conn.close()
+
+    # اطلاعات پروفایل کاربر
+    profile_text = f"پروفایل شما:\n\n"
+    profile_text += f"نام کاربری: {username}\n"
+    profile_text += f"موجودی: {balance} PXT\n"
+    profile_text += f"شناسه کاربری: {user_info[0]}\n"  # نمایش شناسه کاربری
+    profile_text += f"آدرس کیف پول: ناتمام (اضافه کردن امکان ذخیره آدرس کیف پول در آینده)"
+    
+    # ارسال پروفایل به کاربر
+    await update.message.reply_text(profile_text)
+
 # تابع اصلی
 def main():
     create_db()  # ساخت دیتابیس
@@ -169,11 +192,6 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
     application.add_handler(CommandHandler("profile", profile))
-    application.add_handler(CommandHandler("add_admin", add_admin))
-
-    # مدیریت ورودی‌ها
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_new_card))  # برای تغییر شماره کارت
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_new_rate))  # برای تغییر نرخ تبدیل
 
     # شروع ربات
     application.run_polling()
