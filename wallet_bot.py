@@ -1,12 +1,12 @@
 import sqlite3
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram import Update, ReplyKeyboardMarkup, ForceReply
+from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
 
 # توکن ربات تلگرام
 TOKEN = "7092562641:AAF58jJ5u_CB6m7Y2803R8Cx9bdfymZgYuA"
 
 # شناسه مدیر اصلی
-ADMIN_PIN = "AdminPiXiT"
+ADMIN_PIN = "adminpixit"
 
 # ایجاد دیتابیس و جدول برای کاربران، رسیدها، تنظیمات و مدیر اصلی
 def create_db():
@@ -78,13 +78,6 @@ def get_balance(user_id):
     conn.close()
     return balance[0] if balance else 0
 
-# ارسال استیکر
-def send_sticker(update, sticker_id):
-    try:
-        update.message.reply_sticker(sticker_id)
-    except Exception as e:
-        print("Error sending sticker:", e)
-
 # چک کردن اینکه آیا مدیر اصلی تنظیم شده است یا نه
 def check_main_admin():
     conn = sqlite3.connect('wallet.db')
@@ -98,13 +91,10 @@ def check_main_admin():
 async def start(update: Update, context: CallbackContext) -> None:
     # چک کردن مدیر اصلی
     if not check_main_admin():
-        # ارسال پیام و دکمه ثبت مدیر
-        keyboard = [
-            [InlineKeyboardButton("ثبت مدیر اصلی", callback_data='set_admin')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        # ارسال پیام و درخواست کد امنیتی برای ثبت مدیر
+        reply_markup = ForceReply(selective=True)
         await update.message.reply_text(
-            "مدیر اصلی مشخص نشده است. ربات غیر فعال است. لطفاً مدیر اصلی را ثبت کنید.",
+            "مدیر اصلی مشخص نشده است. لطفاً کد امنیتی را وارد کنید.",
             reply_markup=reply_markup
         )
         return
@@ -115,16 +105,13 @@ async def start(update: Update, context: CallbackContext) -> None:
     # ثبت‌نام کاربر
     register_user(user_id, username)
 
-    # ارسال استیکر خوشامدگویی
-    send_sticker(update, "CAACAgUAAxkBAAEBz8FlB8VsdXZZRax7q82yWYNrYm9rWwACFwAD9XgBEbC2P7ahp1EuHgQ")
-
-    # ایجاد منوی شیشه‌ای با دو ستون
+    # ایجاد منوی اصلی با دکمه‌ها
     keyboard = [
-        [InlineKeyboardButton("افزایش موجودی", callback_data='top_up'), InlineKeyboardButton("مشاهده موجودی", callback_data='balance')],
-        [InlineKeyboardButton("پروفایل", callback_data='profile'), InlineKeyboardButton("راهنما", callback_data='help')],
-        [InlineKeyboardButton("تنظیمات", callback_data='settings')]
+        ["افزایش موجودی", "مشاهده موجودی"],
+        ["پروفایل", "راهنما"],
+        ["تنظیمات"]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     
     # ارسال پیام خوشامد
     await update.message.reply_text(
@@ -132,78 +119,41 @@ async def start(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
 
-# مشخص کردن مدیر اصلی
+# دریافت کد امنیتی برای ثبت مدیر اصلی
 async def set_main_admin(update: Update, context: CallbackContext) -> None:
-    if context.args:
-        main_admin_username = context.args[0]
-        main_admin_user_id = update.message.from_user.id
+    entered_code = update.message.text.strip().lower()
+    
+    if entered_code == ADMIN_PIN:
+        user_id = update.message.from_user.id
+        username = update.message.from_user.username
         
         conn = sqlite3.connect('wallet.db')
         c = conn.cursor()
-        c.execute("INSERT INTO main_admin (username, user_id) VALUES (?, ?)", (main_admin_username, main_admin_user_id))
+        c.execute("INSERT INTO main_admin (username, user_id) VALUES (?, ?)", (username, user_id))
         conn.commit()
         conn.close()
-
-        await update.message.reply_text(f"مدیر اصلی با نام کاربری {main_admin_username} تنظیم شد.")
+        
+        await update.message.reply_text("مدیر اصلی با موفقیت ثبت شد!")
     else:
-        await update.message.reply_text("لطفاً نام کاربری مدیر اصلی را وارد کنید.")
+        await update.message.reply_text("کد امنیتی اشتباه است. لطفاً دوباره تلاش کنید.")
 
-# منو تنظیمات
-async def settings(update: Update, context: CallbackContext) -> None:
-    keyboard = [
-        [InlineKeyboardButton("فعال/غیرفعال کردن ربات", callback_data='toggle_robot'), InlineKeyboardButton("تغییر شماره کارت", callback_data='change_card')],
-        [InlineKeyboardButton("تنظیم نرخ تبدیل", callback_data='change_rate')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("مدیر عزیز، لطفاً یکی از گزینه‌ها را انتخاب کنید.", reply_markup=reply_markup)
-
-# مدیریت CallbackQuery برای دکمه‌ها
+# مدیریت ورودی‌ها و دکمه‌ها
 async def handle_button(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    await query.answer()  # پاسخ به callback query
-    callback_data = query.data
-
-    if callback_data == 'top_up':
-        await update.message.reply_text("برای افزایش موجودی روش مورد نظر خود را انتخاب کنید.")
-    elif callback_data == 'balance':
-        await update.message.reply_text(f"موجودی شما: {get_balance(update.message.from_user.id)} PXT")
-    elif callback_data == 'profile':
-        await profile(update, context)
-    elif callback_data == 'help':
-        await update.message.reply_text("راهنما: راهنمای استفاده از ربات.")
-    elif callback_data == 'settings':
-        await settings(update, context)
-    elif callback_data == 'toggle_robot':
-        await toggle_robot(update, context)
-    elif callback_data == 'change_card':
-        await change_card(update, context)
-    elif callback_data == 'change_rate':
-        await change_rate(update, context)
-    elif callback_data == 'set_admin':
-        await set_main_admin(update, context)
-
-# پروفایل کاربر
-async def profile(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    username = update.message.from_user.username
-    balance = get_balance(user_id)
-    
-    # دریافت آدرس کیف پول و اطلاعات دیگر
-    conn = sqlite3.connect('wallet.db')
-    c = conn.cursor()
-    c.execute('SELECT user_id, username FROM users WHERE user_id = ?', (user_id,))
-    user_info = c.fetchone()
-    conn.close()
+    message = update.message.text
 
-    # اطلاعات پروفایل کاربر
-    profile_text = f"پروفایل شما:\n\n"
-    profile_text += f"نام کاربری: {username}\n"
-    profile_text += f"موجودی: {balance} PXT\n"
-    profile_text += f"شناسه کاربری: {user_info[0]}\n"  # نمایش شناسه کاربری
-    profile_text += f"آدرس کیف پول: ناتمام (اضافه کردن امکان ذخیره آدرس کیف پول در آینده)"
-    
-    # ارسال پروفایل به کاربر
-    await update.message.reply_text(profile_text)
+    if message == "افزایش موجودی":
+        await update.message.reply_text("برای افزایش موجودی روش مورد نظر خود را انتخاب کنید.")
+    elif message == "مشاهده موجودی":
+        await update.message.reply_text(f"موجودی شما: {get_balance(user_id)} PXT")
+    elif message == "پروفایل":
+        await update.message.reply_text("اطلاعات پروفایل شما:")
+    elif message == "راهنما":
+        await update.message.reply_text("راهنما: استفاده از ربات بسیار ساده است. با دکمه‌ها اقدام کنید.")
+    elif message == "تنظیمات":
+        await update.message.reply_text("تنظیمات ربات شما:")
+    else:
+        await update.message.reply_text("دکمه نامعتبری انتخاب شده است.")
 
 # تابع اصلی
 def main():
@@ -214,12 +164,10 @@ def main():
 
     # اضافه کردن دستورات
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help))
-    application.add_handler(CommandHandler("profile", profile))
     application.add_handler(CommandHandler("set_admin", set_main_admin))
 
-    # مدیریت callback query ها
-    application.add_handler(CallbackQueryHandler(handle_button))
+    # مدیریت پیام‌ها
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button))
 
     # شروع ربات
     application.run_polling()
