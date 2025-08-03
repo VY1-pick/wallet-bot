@@ -1,11 +1,14 @@
 import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler
 
 # توکن ربات تلگرام
 TOKEN = "7092562641:AAF58jJ5u_CB6m7Y2803R8Cx9bdfymZgYuA"
 
-# ایجاد دیتابیس و جدول برای کاربران، رسیدها و تنظیمات
+# شناسه مدیر اصلی
+ADMIN_PIN = "AdminPiXiT"
+
+# ایجاد دیتابیس و جدول برای کاربران، رسیدها، تنظیمات و مدیر اصلی
 def create_db():
     conn = sqlite3.connect('wallet.db')
     c = conn.cursor()
@@ -43,6 +46,14 @@ def create_db():
             value TEXT
         )
     """)
+    # ایجاد جدول مدیر اصلی
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS main_admin (
+            id INTEGER PRIMARY KEY,
+            username TEXT,
+            user_id INTEGER
+        )
+    """)
     # تنظیمات پیش‌فرض
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('robot_status', 'active')")
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('card_number', '5022291530689296')")
@@ -74,8 +85,22 @@ def send_sticker(update, sticker_id):
     except Exception as e:
         print("Error sending sticker:", e)
 
+# چک کردن اینکه آیا مدیر اصلی تنظیم شده است یا نه
+def check_main_admin():
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM main_admin")
+    admin = c.fetchone()
+    conn.close()
+    return admin
+
 # شروع ربات و منو
 async def start(update: Update, context: CallbackContext) -> None:
+    # چک کردن مدیر اصلی
+    if not check_main_admin():
+        await update.message.reply_text("مدیر اصلی مشخص نشده است. ربات غیر فعال است.")
+        return
+
     user_id = update.message.from_user.id
     username = update.message.from_user.username
     
@@ -85,12 +110,10 @@ async def start(update: Update, context: CallbackContext) -> None:
     # ارسال استیکر خوشامدگویی
     send_sticker(update, "CAACAgUAAxkBAAEBz8FlB8VsdXZZRax7q82yWYNrYm9rWwACFwAD9XgBEbC2P7ahp1EuHgQ")
 
-    # ایجاد منوی شیشه‌ای
+    # ایجاد منوی شیشه‌ای با دو ستون
     keyboard = [
-        [InlineKeyboardButton("افزایش موجودی", callback_data='top_up')],
-        [InlineKeyboardButton("مشاهده موجودی", callback_data='balance')],
-        [InlineKeyboardButton("پروفایل", callback_data='profile')],
-        [InlineKeyboardButton("راهنما", callback_data='help')],
+        [InlineKeyboardButton("افزایش موجودی", callback_data='top_up'), InlineKeyboardButton("مشاهده موجودی", callback_data='balance')],
+        [InlineKeyboardButton("پروفایل", callback_data='profile'), InlineKeyboardButton("راهنما", callback_data='help')],
         [InlineKeyboardButton("تنظیمات", callback_data='settings')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -101,85 +124,53 @@ async def start(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
 
+# مشخص کردن مدیر اصلی
+async def set_main_admin(update: Update, context: CallbackContext) -> None:
+    if context.args:
+        main_admin_username = context.args[0]
+        main_admin_user_id = update.message.from_user.id
+        
+        conn = sqlite3.connect('wallet.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO main_admin (username, user_id) VALUES (?, ?)", (main_admin_username, main_admin_user_id))
+        conn.commit()
+        conn.close()
+
+        await update.message.reply_text(f"مدیر اصلی با نام کاربری {main_admin_username} تنظیم شد.")
+    else:
+        await update.message.reply_text("لطفاً نام کاربری مدیر اصلی را وارد کنید.")
+
 # منو تنظیمات
 async def settings(update: Update, context: CallbackContext) -> None:
     keyboard = [
-        [InlineKeyboardButton("فعال/غیرفعال کردن ربات", callback_data='toggle_robot')],
-        [InlineKeyboardButton("تغییر شماره کارت", callback_data='change_card')],
+        [InlineKeyboardButton("فعال/غیرفعال کردن ربات", callback_data='toggle_robot'), InlineKeyboardButton("تغییر شماره کارت", callback_data='change_card')],
         [InlineKeyboardButton("تنظیم نرخ تبدیل", callback_data='change_rate')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("مدیر عزیز، لطفاً یکی از گزینه‌ها را انتخاب کنید.", reply_markup=reply_markup)
 
-# تغییر وضعیت ربات (فعال/غیرفعال)
-async def toggle_robot(update: Update, context: CallbackContext) -> None:
-    conn = sqlite3.connect('wallet.db')
-    c = conn.cursor()
-    c.execute("SELECT value FROM settings WHERE key = 'robot_status'")
-    current_status = c.fetchone()[0]
-    new_status = 'inactive' if current_status == 'active' else 'active'
-    c.execute("UPDATE settings SET value = ? WHERE key = 'robot_status'", (new_status,))
-    conn.commit()
-    conn.close()
-    status_text = f"ربات {new_status} شد."
-    await update.message.reply_text(status_text)
+# مدیریت CallbackQuery برای دکمه‌ها
+async def handle_button(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()  # پاسخ به callback query
+    callback_data = query.data
 
-# تغییر شماره کارت
-async def change_card(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("لطفاً شماره کارت جدید را وارد کنید:")
-
-# دریافت شماره کارت جدید
-async def set_new_card(update: Update, context: CallbackContext) -> None:
-    new_card = update.message.text
-    if re.match(r"^\d{16}$", new_card):  # بررسی شماره کارت
-        conn = sqlite3.connect('wallet.db')
-        c = conn.cursor()
-        c.execute("UPDATE settings SET value = ? WHERE key = 'card_number'", (new_card,))
-        conn.commit()
-        conn.close()
-        await update.message.reply_text(f"شماره کارت به {new_card} تغییر یافت.")
-    else:
-        await update.message.reply_text("شماره کارت وارد شده معتبر نیست. لطفاً یک شماره کارت معتبر وارد کنید.")
-
-# تغییر نرخ تبدیل
-async def change_rate(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("لطفاً نرخ تبدیل جدید (تومان به PXT) را وارد کنید:")
-
-# دریافت نرخ تبدیل جدید
-async def set_new_rate(update: Update, context: CallbackContext) -> None:
-    new_rate = update.message.text
-    if new_rate.isdigit():
-        conn = sqlite3.connect('wallet.db')
-        c = conn.cursor()
-        c.execute("UPDATE settings SET value = ? WHERE key = 'rate'", (new_rate,))
-        conn.commit()
-        conn.close()
-        await update.message.reply_text(f"نرخ تبدیل به {new_rate} تومان برای هر PXT تغییر یافت.")
-    else:
-        await update.message.reply_text("لطفاً یک نرخ معتبر وارد کنید.")
-
-# پروفایل کاربر
-async def profile(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-    username = update.message.from_user.username
-    balance = get_balance(user_id)
-    
-    # دریافت آدرس کیف پول و اطلاعات دیگر
-    conn = sqlite3.connect('wallet.db')
-    c = conn.cursor()
-    c.execute('SELECT user_id, username FROM users WHERE user_id = ?', (user_id,))
-    user_info = c.fetchone()
-    conn.close()
-
-    # اطلاعات پروفایل کاربر
-    profile_text = f"پروفایل شما:\n\n"
-    profile_text += f"نام کاربری: {username}\n"
-    profile_text += f"موجودی: {balance} PXT\n"
-    profile_text += f"شناسه کاربری: {user_info[0]}\n"  # نمایش شناسه کاربری
-    profile_text += f"آدرس کیف پول: ناتمام (اضافه کردن امکان ذخیره آدرس کیف پول در آینده)"
-    
-    # ارسال پروفایل به کاربر
-    await update.message.reply_text(profile_text)
+    if callback_data == 'top_up':
+        await update.message.reply_text("برای افزایش موجودی روش مورد نظر خود را انتخاب کنید.")
+    elif callback_data == 'balance':
+        await update.message.reply_text(f"موجودی شما: {get_balance(update.message.from_user.id)} PXT")
+    elif callback_data == 'profile':
+        await profile(update, context)
+    elif callback_data == 'help':
+        await update.message.reply_text("راهنما: راهنمای استفاده از ربات.")
+    elif callback_data == 'settings':
+        await settings(update, context)
+    elif callback_data == 'toggle_robot':
+        await toggle_robot(update, context)
+    elif callback_data == 'change_card':
+        await change_card(update, context)
+    elif callback_data == 'change_rate':
+        await change_rate(update, context)
 
 # تابع اصلی
 def main():
@@ -192,6 +183,10 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
     application.add_handler(CommandHandler("profile", profile))
+    application.add_handler(CommandHandler("set_admin", set_main_admin))
+
+    # مدیریت callback query ها
+    application.add_handler(CallbackQueryHandler(handle_button))
 
     # شروع ربات
     application.run_polling()
