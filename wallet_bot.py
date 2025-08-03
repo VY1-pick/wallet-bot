@@ -796,89 +796,6 @@ async def set_bot_status(status: str):
         await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('bot_status', ?)", (status,))
         await db.commit()
 
-# --- کلیدهای کیبورد ---
-
-def main_menu_keyboard():
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.add(
-        InlineKeyboardButton("پروفایل", callback_data="profile"),
-        InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance"),
-        InlineKeyboardButton("کارت به کارت", callback_data="topup_card_to_card"),
-        InlineKeyboardButton("ارتباط با پشتیبانی", callback_data="support_contact")
-    )
-    return keyboard
-
-def admin_main_menu_keyboard(is_super: bool):
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.add(
-        InlineKeyboardButton("افزایش موجودی دستی", callback_data="admin_increase_balance"),
-        InlineKeyboardButton("ایجاد کد هدیه", callback_data="admin_create_gift_code"),
-        InlineKeyboardButton("ایجاد کد تخفیف", callback_data="admin_create_discount_code"),
-        InlineKeyboardButton("گزارش مالی", callback_data="admin_financial_report"),
-        InlineKeyboardButton("تغییر وضعیت ربات", callback_data="admin_toggle_bot"),
-    )
-    if is_super:
-        keyboard.add(InlineKeyboardButton("ثبت ادمین جدید", callback_data="admin_add_new_admin"))
-    return keyboard
-
-# --- راه‌اندازی دیتابیس ---
-
-async def setup_database():
-    async with aiosqlite.connect("wallet.db") as db:
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            full_name TEXT,
-            wallet TEXT UNIQUE,
-            balance INTEGER DEFAULT 0
-        )
-        """)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS admins (
-            user_id INTEGER PRIMARY KEY,
-            is_super INTEGER DEFAULT 0
-        )
-        """)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS topup_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            amount INTEGER,
-            receipt_file_id TEXT,
-            status TEXT DEFAULT 'pending'
-        )
-        """)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS gift_codes (
-            code TEXT PRIMARY KEY,
-            used INTEGER DEFAULT 0
-        )
-        """)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS discount_codes (
-            code TEXT PRIMARY KEY,
-            used INTEGER DEFAULT 0
-        )
-        """)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            from_user INTEGER,
-            to_wallet TEXT,
-            amount INTEGER,
-            type TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """)
-        await db.commit()
-
 # --- شروع اصلی ---
 
 if __name__ == "__main__":
@@ -889,6 +806,7 @@ if __name__ == "__main__":
     import asyncio
     asyncio.run(setup_database())
     executor.start_polling(dp, skip_updates=True)
+
 
 
 
