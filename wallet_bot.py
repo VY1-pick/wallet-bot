@@ -1,6 +1,6 @@
 import sqlite3
-from telegram import Update, ReplyKeyboardMarkup, ForceReply
-from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, filters
 
 # توکن ربات تلگرام
 TOKEN = "7092562641:AAF58jJ5u_CB6m7Y2803R8Cx9bdfymZgYuA"
@@ -54,10 +54,19 @@ def create_db():
             user_id INTEGER
         )
     """)
+    # ایجاد جدول تنظیمات عضویت اجباری
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS channel_settings (
+            id INTEGER PRIMARY KEY,
+            channel_id TEXT,
+            is_mandatory INTEGER DEFAULT 0
+        )
+    """)
     # تنظیمات پیش‌فرض
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('robot_status', 'active')")
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('card_number', '5022291530689296')")
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate', '1000')")
+    c.execute("INSERT OR IGNORE INTO channel_settings (channel_id, is_mandatory) VALUES ('', 0)")  # کانال خالی و عضویت غیرفعال
     conn.commit()
     conn.close()
 
@@ -87,17 +96,38 @@ def check_main_admin():
     conn.close()
     return admin
 
+# چک کردن عضویت در کانال
+async def check_channel_membership(update: Update, context: CallbackContext):
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key = 'channel_id'")
+    channel_id = c.fetchone()[0]
+    c.execute("SELECT value FROM channel_settings WHERE id = 1")
+    is_mandatory = c.fetchone()[0]
+    conn.close()
+
+    if is_mandatory:
+        # اگر عضویت اجباری باشد
+        user_id = update.message.from_user.id
+        member_status = await context.bot.get_chat_member(channel_id, user_id)
+        
+        if member_status.status not in ['member', 'administrator']:
+            await update.message.reply_text("برای استفاده از ربات باید ابتدا در کانال عضو شوید.")
+            return False
+    return True
+
 # شروع ربات و منو
 async def start(update: Update, context: CallbackContext) -> None:
-    # چک کردن مدیر اصلی
     if not check_main_admin():
-        # ارسال پیام و درخواست کد امنیتی برای ثبت مدیر
         reply_markup = ForceReply(selective=True)
         await update.message.reply_text(
             "مدیر اصلی مشخص نشده است. لطفاً کد امنیتی را وارد کنید.",
             reply_markup=reply_markup
         )
         return
+
+    if not await check_channel_membership(update, context):
+        return  # اگر کاربر در کانال نیست، اجازه ادامه نخواهد داشت
 
     user_id = update.message.from_user.id
     username = update.message.from_user.username
@@ -119,7 +149,7 @@ async def start(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
 
-# دریافت کد امنیتی برای ثبت مدیر اصلی
+# مشخص کردن مدیر اصلی
 async def set_main_admin(update: Update, context: CallbackContext) -> None:
     entered_code = update.message.text.strip().lower()
     
@@ -137,23 +167,55 @@ async def set_main_admin(update: Update, context: CallbackContext) -> None:
     else:
         await update.message.reply_text("کد امنیتی اشتباه است. لطفاً دوباره تلاش کنید.")
 
-# مدیریت ورودی‌ها و دکمه‌ها
-async def handle_button(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-    message = update.message.text
+# منو تنظیمات
+async def settings(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        [InlineKeyboardButton("فعال/غیرفعال کردن عضویت اجباری", callback_data='toggle_membership')],
+        [InlineKeyboardButton("تغییر کانال", callback_data='change_channel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("مدیر عزیز، لطفاً یکی از گزینه‌ها را انتخاب کنید.", reply_markup=reply_markup)
 
-    if message == "افزایش موجودی":
-        await update.message.reply_text("برای افزایش موجودی روش مورد نظر خود را انتخاب کنید.")
-    elif message == "مشاهده موجودی":
-        await update.message.reply_text(f"موجودی شما: {get_balance(user_id)} PXT")
-    elif message == "پروفایل":
-        await update.message.reply_text("اطلاعات پروفایل شما:")
-    elif message == "راهنما":
-        await update.message.reply_text("راهنما: استفاده از ربات بسیار ساده است. با دکمه‌ها اقدام کنید.")
-    elif message == "تنظیمات":
-        await update.message.reply_text("تنظیمات ربات شما:")
-    else:
-        await update.message.reply_text("دکمه نامعتبری انتخاب شده است.")
+# تغییر وضعیت عضویت اجباری
+async def toggle_membership(update: Update, context: CallbackContext) -> None:
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute("SELECT is_mandatory FROM channel_settings WHERE id = 1")
+    current_status = c.fetchone()[0]
+    new_status = 1 if current_status == 0 else 0
+    c.execute("UPDATE channel_settings SET is_mandatory = ? WHERE id = 1", (new_status,))
+    conn.commit()
+    conn.close()
+
+    status_text = "عضویت اجباری فعال شد." if new_status == 1 else "عضویت اجباری غیرفعال شد."
+    await update.message.reply_text(status_text)
+
+# تغییر شناسه کانال
+async def change_channel(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text("لطفاً شناسه کانال جدید را وارد کنید:")
+
+# دریافت شناسه کانال جدید
+async def set_new_channel(update: Update, context: CallbackContext) -> None:
+    new_channel_id = update.message.text.strip()
+
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute("UPDATE channel_settings SET channel_id = ? WHERE id = 1", (new_channel_id,))
+    conn.commit()
+    conn.close()
+
+    await update.message.reply_text(f"شناسه کانال به {new_channel_id} تغییر یافت.")
+
+# مدیریت CallbackQuery برای دکمه‌ها
+async def handle_button(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()  # پاسخ به callback query
+    callback_data = query.data
+
+    if callback_data == 'toggle_membership':
+        await toggle_membership(update, context)
+    elif callback_data == 'change_channel':
+        await change_channel(update, context)
 
 # تابع اصلی
 def main():
@@ -168,6 +230,9 @@ def main():
 
     # مدیریت پیام‌ها
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button))
+
+    # مدیریت callback query ها
+    application.add_handler(CallbackQueryHandler(handle_button))
 
     # شروع ربات
     application.run_polling()
