@@ -58,6 +58,29 @@ async def balance_cmd(message: types.Message):
         else:
             await message.reply("❗ حسابی برای شما پیدا نشد. لطفاً /start رو بزنید.")
 
+# فرمان /topup
+@dp.message_handler(commands=['topup'])
+async def topup_cmd(message: types.Message):
+    user_id = message.from_user.id
+    try:
+        parts = message.text.split()
+        if len(parts) != 2:
+            raise ValueError("فرمت نادرست")
+
+        amount = int(parts[1])
+        if amount <= 0:
+            raise ValueError("مقدار نامعتبر")
+
+        async with aiosqlite.connect("wallet.db") as db:
+            await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+            await db.commit()
+
+        await message.reply(f"✅ مبلغ {amount} تومان با موفقیت به کیف پول شما اضافه شد.")
+
+    except ValueError:
+        await message.reply("❌ لطفاً دستور را به این صورت وارد کنید:\n`/topup 20000`", parse_mode="Markdown")
+
+
 # شروع ربات
 async def on_startup(_):
     await init_db()
