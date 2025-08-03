@@ -71,7 +71,8 @@ async def send(update: Update, context: CallbackContext) -> None:
     else:
         await update.message.reply_text("موجودی کافی برای انجام این تراکنش ندارید.")
 
-async def main():
+# حذف تابع asyncio.run و استفاده مستقیم از run_polling
+def main():
     create_db()  # ساخت دیتابیس
 
     # ایجاد Application
@@ -83,9 +84,7 @@ async def main():
     application.add_handler(CommandHandler("send", send))
 
     # شروع ربات
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
-
+    main()
