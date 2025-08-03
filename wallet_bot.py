@@ -98,7 +98,15 @@ def check_main_admin():
 async def start(update: Update, context: CallbackContext) -> None:
     # چک کردن مدیر اصلی
     if not check_main_admin():
-        await update.message.reply_text("مدیر اصلی مشخص نشده است. ربات غیر فعال است.")
+        # ارسال پیام و دکمه ثبت مدیر
+        keyboard = [
+            [InlineKeyboardButton("ثبت مدیر اصلی", callback_data='set_admin')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            "مدیر اصلی مشخص نشده است. ربات غیر فعال است. لطفاً مدیر اصلی را ثبت کنید.",
+            reply_markup=reply_markup
+        )
         return
 
     user_id = update.message.from_user.id
@@ -171,6 +179,8 @@ async def handle_button(update: Update, context: CallbackContext) -> None:
         await change_card(update, context)
     elif callback_data == 'change_rate':
         await change_rate(update, context)
+    elif callback_data == 'set_admin':
+        await set_main_admin(update, context)
 
 # پروفایل کاربر
 async def profile(update: Update, context: CallbackContext) -> None:
@@ -216,5 +226,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
