@@ -7,7 +7,9 @@ import logging
 import os
 
 # تنظیمات اولیه
-API_TOKEN = os.getenv('API_TOKEN')  # متغیر محیطی توکن ربات
+API_TOKEN = os.getenv('API_TOKEN')  # استفاده از متغیر محیطی
+if not API_TOKEN:
+    raise ValueError("API_TOKEN is not set")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -109,3 +111,4 @@ async def cmd_gift(message: types.Message):
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
     executor.start_polling(dp, skip_updates=True)
+
