@@ -1,98 +1,111 @@
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, InputSticker
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
+import sqlite3
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import ParseMode
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.utils import executor
+import logging
+import os
 
-# توکن ربات
-TOKEN = '7092562641:AAEq2jTy1sXIdAXJXzuYwCqTjEd4PjnXgCI'
+# تنظیمات اولیه
+API_TOKEN = os.getenv('API_TOKEN')  # متغیر محیطی توکن ربات
 
-# اطلاعات کاربران
-admins = ['admin_telegram_id']  # ایدی تلگرام ادمین اصلی
-users = {}  # دیکشنری ذخیره اطلاعات کاربران (برای مدیریت موجودی و وضعیت عضویت)
+logging.basicConfig(level=logging.INFO)
 
-# استیکرهایی که میخوای استفاده کنی
-sticker = "استیکر_آیدی"  # استیکر برای خوشامدگویی یا تعامل
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
+dp.middleware.setup(LoggingMiddleware())
 
-# تابع شروع ربات
-def start(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    # چک کردن عضویت
-    if user_id not in users:
-        update.message.reply_text("برای استفاده از ربات باید عضو بشید. لطفا از دکمه زیر برای عضویت استفاده کنید.")
-        # دکمه برای عضویت
-        keyboard = [[InlineKeyboardButton("عضویت", callback_data='signup')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text("برای عضویت بر روی دکمه کلیک کن.", reply_markup=reply_markup)
+# ایجاد دیتابیس
+def create_db():
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance INTEGER)''')
+    conn.commit()
+    conn.close()
+
+# گرفتن موجودی کاربر
+def get_balance(user_id):
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    c.execute('SELECT balance FROM users WHERE user_id=?', (user_id,))
+    balance = c.fetchone()
+    conn.close()
+    return balance[0] if balance else 0
+
+# افزودن موجودی
+def add_balance(user_id, amount):
+    current_balance = get_balance(user_id)
+    new_balance = current_balance + amount
+    conn = sqlite3.connect('wallet.db')
+    c = conn.cursor()
+    if get_balance(user_id) == 0:
+        c.execute('INSERT INTO users (user_id, balance) VALUES (?, ?)', (user_id, new_balance))
     else:
-        # اگر کاربر عضو بود، خوشامدگویی
-        update.message.reply_text(f"سلام {update.message.from_user.first_name}! خوش اومدی به ربات کیف پول رزومیت!")
+        c.execute('UPDATE users SET balance=? WHERE user_id=?', (new_balance, user_id))
+    conn.commit()
+    conn.close()
 
-# تابع عضویت
-def signup(update: Update, context: CallbackContext):
-    user_id = update.callback_query.from_user.id
-    if user_id not in users:
-        users[user_id] = {"balance": 0, "role": "user"}  # اطلاعات کاربر و موجودی
-        update.callback_query.answer("شما با موفقیت عضو شدید.")
-        update.callback_query.edit_message_text(f"سلام! خوش اومدی به ربات. موجودی شما: {users[user_id]['balance']} PXT")
-    else:
-        update.callback_query.answer("شما قبلاً عضو شدید.")
+# دستور شروع
+@dp.message_handler(commands=['start'])
+async def cmd_start(message: types.Message):
+    await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.")
 
-# تابع مدیریت موجودی
-def balance(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    if user_id in users:
-        balance = users[user_id]['balance']
-        update.message.reply_text(f"موجودی شما: {balance} PXT")
-    else:
-        update.message.reply_text("شما هنوز عضو نشده‌اید. برای عضویت از دستور /start استفاده کنید.")
+# دستور مشاهده موجودی
+@dp.message_handler(commands=['balance'])
+async def cmd_balance(message: types.Message):
+    user_id = message.from_user.id
+    balance = get_balance(user_id)
+    await message.answer(f"موجودی شما: {balance} PXT")
 
-# تابع مدیریت دسترسی به ادمین
-def admin_panel(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    if str(user_id) in admins:
-        keyboard = [
-            [InlineKeyboardButton("افزودن موجودی به کاربر", callback_data='add_balance')],
-            [InlineKeyboardButton("نمایش لیست کاربران", callback_data='list_users')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text("پنل مدیریت:", reply_markup=reply_markup)
-    else:
-        update.message.reply_text("شما اجازه دسترسی به این بخش را ندارید.")
+# دستور انتقال وجه
+@dp.message_handler(commands=['transfer'])
+async def cmd_transfer(message: types.Message):
+    user_id = message.from_user.id
+    args = message.get_args().split()
 
-# دستورات برای ادمین
-def admin_actions(update: Update, context: CallbackContext):
-    query = update.callback_query
-    user_id = query.from_user.id
+    if len(args) != 2:
+        await message.answer("لطفاً به شکل زیر درخواست رو وارد کن:\n/transfer <مقدار> <شناسه گیرنده>")
+        return
     
-    if query.data == 'add_balance':
-        # اینجا کد مربوط به افزودن موجودی به کاربر رو می‌نویسیم
-        query.edit_message_text("برای افزودن موجودی، آی‌دی کاربر و مقدار رو وارد کن.")
-        # این قسمت به ورود اطلاعات نیاز داره، مثلاً پیام بعدی به کاربر اطلاعات ورود رو درخواست میکنه.
-    elif query.data == 'list_users':
-        # نمایش لیست کاربران
-        user_list = "\n".join([f"{user_id}: {info['balance']} PXT" for user_id, info in users.items()])
-        query.edit_message_text(f"لیست کاربران:\n{user_list}")
+    try:
+        amount = int(args[0])
+        recipient_id = int(args[1])
+    except ValueError:
+        await message.answer("لطفاً مقادیر صحیح وارد کنید.")
+        return
 
-# استیکر برای خوشامدگویی
-def send_sticker(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    if user_id in users:
-        update.message.reply_sticker(sticker)
+    if amount <= 0:
+        await message.answer("مقدار باید بیشتر از صفر باشد.")
+        return
+    
+    sender_balance = get_balance(user_id)
+    if sender_balance < amount:
+        await message.answer("موجودی کافی نیست.")
+        return
 
-# تابع اصلی که ربات رو اجرا میکنه
-def main():
-    updater = Updater(TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+    # انتقال وجه
+    add_balance(user_id, -amount)
+    add_balance(recipient_id, amount)
+    await message.answer(f"موفقیت! {amount} PXT به کاربر {recipient_id} منتقل شد.")
 
-    # دستورات اصلی
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("balance", balance))
-    dispatcher.add_handler(CommandHandler("admin", admin_panel))
-    dispatcher.add_handler(CallbackQueryHandler(signup, pattern='signup'))
-    dispatcher.add_handler(CallbackQueryHandler(admin_actions, pattern='add_balance|list_users'))
-    dispatcher.add_handler(MessageHandler(Filters.sticker, send_sticker))  # استفاده از استیکر
+# دستور وارد کردن کد هدیه
+@dp.message_handler(commands=['gift'])
+async def cmd_gift(message: types.Message):
+    user_id = message.from_user.id
+    args = message.get_args()
 
-    # شروع ربات
-    updater.start_polling()
-    updater.idle()
+    if len(args) != 1:
+        await message.answer("لطفاً کد هدیه رو وارد کن.")
+        return
+    
+    code = args[0]
+    if code == "GIFT123":  # مثلاً کد هدیه پیش‌فرض
+        add_balance(user_id, 1000)  # افزودن 1000 PXT به موجودی
+        await message.answer("کد هدیه معتبر بود! 1000 PXT به موجودی شما افزوده شد.")
+    else:
+        await message.answer("کد هدیه نامعتبر است.")
 
+# اجرای ربات
 if __name__ == '__main__':
-    main()
+    create_db()  # ساخت دیتابیس
+    executor.start_polling(dp, skip_updates=True)
