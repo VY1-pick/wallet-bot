@@ -1,6 +1,6 @@
 import sqlite3
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode, InlineKeyboardButton, InlineKeyboardMarkup, InputTextMessageContent
+from aiogram.types import ParseMode, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 import logging
@@ -14,6 +14,7 @@ admin_main = []  # مدیران اصلی به صورت لیست
 admin_simple = []  # مدیران ساده به صورت لیست
 join_required = True  # جوین اجباری فعال است یا نه
 admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
+channel_link = '@your_channel'  # لینک کانال که اعضا باید به آن بپیوندند
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -65,28 +66,44 @@ def create_admin_panel():
     keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
     return keyboard
 
+# دکمه شیشه‌ای برای بررسی عضویت
+def create_check_membership_button():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
+    return keyboard
+
 # دستور شروع
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
-    if not await check_membership(user_id):
-        await message.answer("برای استفاده از ربات باید به کانال ما بپیوندید.")
-        return
+    if join_required:
+        if not await check_membership(user_id):
+            # نمایش دکمه شیشه‌ای برای عضویت
+            await message.answer(f"برای استفاده از ربات باید به کانال {channel_link} بپیوندید.", reply_markup=create_check_membership_button())
+            return
     if user_id in admin_main:
         await message.answer("سلام مدیر اصلی! به ربات خوش آمدید.", reply_markup=create_admin_panel())
     else:
         await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.")
 
-# بررسی عضویت در کانال
+# بررسی عضویت کاربر در کانال
 async def check_membership(user_id):
     if join_required:
-        channel = '@your_channel'  # لینک کانال شما
         try:
-            member = await bot.get_chat_member(channel, user_id)
+            member = await bot.get_chat_member(channel_link, user_id)
             return member.status in ['member', 'administrator', 'creator']
         except Exception:
             return False
     return True
+
+# بررسی عضویت از دکمه شیشه‌ای
+@dp.callback_query_handler(lambda c: c.data == "check_membership")
+async def check_membership_callback(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    if await check_membership(user_id):
+        await bot.answer_callback_query(callback_query.id, text="شما به کانال ملحق شده‌اید.")
+    else:
+        await bot.answer_callback_query(callback_query.id, text="شما هنوز به کانال عضو نشده‌اید. لطفاً عضو شوید.")
 
 # دستورات ادمین
 @dp.message_handler(commands=['admin_panel'])
