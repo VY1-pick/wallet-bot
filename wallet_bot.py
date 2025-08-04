@@ -1,16 +1,19 @@
 import sqlite3
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode
+from aiogram.types import ParseMode, InlineKeyboardButton, InlineKeyboardMarkup, InputTextMessageContent
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 import logging
 import os
+import random
+import string
 
 # تنظیمات اولیه
-API_TOKEN = os.getenv('API_TOKEN')  # استفاده از متغیر محیطی
-if not API_TOKEN:
-    raise ValueError("API_TOKEN is not set")
-
+API_TOKEN = os.getenv('API_TOKEN')  # متغیر محیطی توکن ربات
+admin_main = []  # مدیران اصلی به صورت لیست
+admin_simple = []  # مدیران ساده به صورت لیست
+join_required = True  # جوین اجباری فعال است یا نه
+admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -21,7 +24,8 @@ dp.middleware.setup(LoggingMiddleware())
 def create_db():
     conn = sqlite3.connect('wallet.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance INTEGER, joined BOOLEAN)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS admins (user_id INTEGER PRIMARY KEY, role TEXT)''')  # برای ذخیره مدیران
     conn.commit()
     conn.close()
 
@@ -47,68 +51,117 @@ def add_balance(user_id, amount):
     conn.commit()
     conn.close()
 
+# ایجاد دکمه‌ها و منوها
+def create_main_menu():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("ثبت مدیر اصلی", callback_data="register_admin"))
+    keyboard.add(InlineKeyboardButton("پنل مدیریت", callback_data="admin_panel"))
+    return keyboard
+
+def create_admin_panel():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("مدیران", callback_data="manage_admins"))
+    keyboard.add(InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance"))
+    keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
+    return keyboard
+
 # دستور شروع
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
-    await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.")
-
-# دستور مشاهده موجودی
-@dp.message_handler(commands=['balance'])
-async def cmd_balance(message: types.Message):
     user_id = message.from_user.id
-    balance = get_balance(user_id)
-    await message.answer(f"موجودی شما: {balance} PXT")
-
-# دستور انتقال وجه
-@dp.message_handler(commands=['transfer'])
-async def cmd_transfer(message: types.Message):
-    user_id = message.from_user.id
-    args = message.get_args().split()
-
-    if len(args) != 2:
-        await message.answer("لطفاً به شکل زیر درخواست رو وارد کن:\n/transfer <مقدار> <شناسه گیرنده>")
+    if not await check_membership(user_id):
+        await message.answer("برای استفاده از ربات باید به کانال ما بپیوندید.")
         return
-    
-    try:
-        amount = int(args[0])
-        recipient_id = int(args[1])
-    except ValueError:
-        await message.answer("لطفاً مقادیر صحیح وارد کنید.")
-        return
-
-    if amount <= 0:
-        await message.answer("مقدار باید بیشتر از صفر باشد.")
-        return
-    
-    sender_balance = get_balance(user_id)
-    if sender_balance < amount:
-        await message.answer("موجودی کافی نیست.")
-        return
-
-    # انتقال وجه
-    add_balance(user_id, -amount)
-    add_balance(recipient_id, amount)
-    await message.answer(f"موفقیت! {amount} PXT به کاربر {recipient_id} منتقل شد.")
-
-# دستور وارد کردن کد هدیه
-@dp.message_handler(commands=['gift'])
-async def cmd_gift(message: types.Message):
-    user_id = message.from_user.id
-    args = message.get_args()
-
-    if len(args) != 1:
-        await message.answer("لطفاً کد هدیه رو وارد کن.")
-        return
-    
-    code = args[0]
-    if code == "GIFT123":  # مثلاً کد هدیه پیش‌فرض
-        add_balance(user_id, 1000)  # افزودن 1000 PXT به موجودی
-        await message.answer("کد هدیه معتبر بود! 1000 PXT به موجودی شما افزوده شد.")
+    if user_id in admin_main:
+        await message.answer("سلام مدیر اصلی! به ربات خوش آمدید.", reply_markup=create_admin_panel())
     else:
-        await message.answer("کد هدیه نامعتبر است.")
+        await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.")
+
+# بررسی عضویت در کانال
+async def check_membership(user_id):
+    if join_required:
+        channel = '@your_channel'  # لینک کانال شما
+        try:
+            member = await bot.get_chat_member(channel, user_id)
+            return member.status in ['member', 'administrator', 'creator']
+        except Exception:
+            return False
+    return True
+
+# دستورات ادمین
+@dp.message_handler(commands=['admin_panel'])
+async def cmd_admin_panel(message: types.Message):
+    if message.from_user.id in admin_main:
+        await message.answer("پنل مدیریت:\n1. مدیران\n2. افزایش موجودی\n3. تنظیمات جوین اجباری", reply_markup=create_admin_panel())
+    else:
+        await message.answer("شما دسترسی به پنل مدیریت ندارید.")
+
+# ثبت مدیر اصلی
+@dp.callback_query_handler(lambda c: c.data == "register_admin")
+async def register_admin(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(callback_query.from_user.id, "لطفاً کد مدیر اصلی را وارد کنید:")
+
+@dp.message_handler(lambda message: message.text == admin_code)
+async def set_admin(message: types.Message):
+    user_id = message.from_user.id
+    if user_id not in admin_main:
+        admin_main.append(user_id)
+        await message.answer("شما به عنوان مدیر اصلی ثبت شدید.", reply_markup=create_admin_panel())
+    else:
+        await message.answer("شما قبلاً به عنوان مدیر اصلی ثبت شدید.")
+
+# ثبت مدیر ساده توسط مدیر اصلی
+@dp.message_handler(commands=['add_admin'])
+async def add_admin(message: types.Message):
+    if message.from_user.id in admin_main:
+        link = f"https://t.me/{bot.username}?start={message.from_user.id}"  # لینک خاص برای اضافه کردن مدیر
+        await message.answer(f"برای افزودن مدیر ساده، این لینک را ارسال کن: {link}")
+    else:
+        await message.answer("شما دسترسی به این فرمان ندارید.")
+
+# ثبت مدیر ساده از طریق لینک
+@dp.message_handler(commands=['start'])
+async def cmd_start_admin(message: types.Message):
+    if message.text.startswith("/start"):
+        referrer_id = message.text.split()[-1]
+        if referrer_id.isdigit() and int(referrer_id) in admin_main:
+            admin_simple.append(message.from_user.id)
+            await message.answer("شما به عنوان مدیر ساده ثبت شدید.")
+        else:
+            await message.answer("این لینک معتبر نیست.")
+
+# نمایش مدیران برای مدیر اصلی
+@dp.callback_query_handler(lambda c: c.data == "manage_admins")
+async def manage_admins(callback_query: types.CallbackQuery):
+    if callback_query.from_user.id in admin_main:
+        admin_list = "\n".join([str(admin) for admin in admin_main])  # مدیران اصلی
+        admin_simple_list = "\n".join([str(admin) for admin in admin_simple])  # مدیران ساده
+        await callback_query.answer()
+        await callback_query.message.answer(f"مدیران اصلی:\n{admin_list}\n\nمدیران ساده:\n{admin_simple_list}")
+    else:
+        await callback_query.answer("شما دسترسی به این بخش ندارید.")
+
+# جوین اجباری
+@dp.callback_query_handler(lambda c: c.data == "set_join_required")
+async def set_join_required(callback_query: types.CallbackQuery):
+    if callback_query.from_user.id in admin_main:
+        global join_required
+        join_required = not join_required
+        status = "فعال" if join_required else "غیرفعال"
+        await callback_query.answer(f"جوین اجباری {status} شد.")
+    else:
+        await callback_query.answer("شما دسترسی به این بخش ندارید.")
+
+# افزایش موجودی
+@dp.callback_query_handler(lambda c: c.data == "increase_balance")
+async def increase_balance(callback_query: types.CallbackQuery):
+    if callback_query.from_user.id in admin_main:
+        await callback_query.answer("برای افزایش موجودی، شناسه کاربر و مقدار را وارد کنید.")
+    else:
+        await callback_query.answer("شما دسترسی به این بخش ندارید.")
 
 # اجرای ربات
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
     executor.start_polling(dp, skip_updates=True)
-
