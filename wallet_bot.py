@@ -12,7 +12,7 @@ admin_main = []  # مدیران اصلی به صورت لیست
 admin_simple = []  # مدیران ساده به صورت لیست
 join_required = True  # جوین اجباری فعال است یا نه
 admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
-channel_link = ''  # لینک کانال که اعضا باید به آن بپیوندند
+channel_link = '@Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -70,7 +70,7 @@ def create_admin_panel():
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("مدیران", callback_data="manage_admins"))
     keyboard.add(InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance"))
-    keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
+    keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="toggle_join_required"))
     return keyboard
 
 # دکمه شیشه‌ای برای پیوستن به کانال و بررسی عضویت
@@ -178,6 +178,18 @@ async def set_join_required(callback_query: types.CallbackQuery):
         join_required = not join_required
         status = "فعال" if join_required else "غیرفعال"
         await callback_query.answer(f"جوین اجباری {status} شد.")
+    else:
+        await callback_query.answer("شما دسترسی به این بخش ندارید.")
+
+# تغییر وضعیت جوین اجباری از پنل مدیریت
+@dp.callback_query_handler(lambda c: c.data == "toggle_join_required")
+async def toggle_join_required(callback_query: types.CallbackQuery):
+    if callback_query.from_user.id in admin_main:
+        global join_required
+        join_required = not join_required
+        status = "فعال" if join_required else "غیرفعال"
+        await callback_query.answer(f"جوین اجباری {status} شد.")
+        await callback_query.message.edit_reply_markup(reply_markup=create_admin_panel())
     else:
         await callback_query.answer("شما دسترسی به این بخش ندارید.")
 
