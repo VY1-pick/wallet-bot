@@ -1,18 +1,19 @@
 import sqlite3
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 import logging
 import os
 
 # تنظیمات اولیه
-API_TOKEN = os.getenv('API_TOKEN')  # متغیر محیطی توکن ربات
-admin_main = []  # مدیران اصلی به صورت لیست
-admin_simple = []  # مدیران ساده به صورت لیست
-join_required = True  # جوین اجباری فعال است یا نه
-admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
-channel_link = '@Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
+API_TOKEN = os.getenv('API_TOKEN')  # توکن ربات
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # آدرس Webhook
+admin_main = []  # مدیران اصلی
+admin_simple = []  # مدیران ساده
+join_required = True  # جوین اجباری
+admin_code = "SECRET_CODE"  # کد مدیر اصلی
+channel_link = '@your_channel'  # لینک کانال
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -24,12 +25,12 @@ def create_db():
     conn = sqlite3.connect('wallet.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, balance INTEGER, joined BOOLEAN)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS admins (user_id INTEGER PRIMARY KEY, role TEXT)''')  # برای ذخیره مدیران
-    c.execute('''CREATE TABLE IF NOT EXISTS deposit_requests (user_id INTEGER, amount INTEGER, method TEXT, status TEXT, receipt_url TEXT)''')  # ذخیره درخواست‌های واریزی
+    c.execute('''CREATE TABLE IF NOT EXISTS admins (user_id INTEGER PRIMARY KEY, role TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS deposit_requests (user_id INTEGER, amount INTEGER, method TEXT, status TEXT, receipt_url TEXT)''')
     conn.commit()
     conn.close()
 
-# گرفتن موجودی کاربر
+# دریافت موجودی کاربر
 def get_balance(user_id):
     conn = sqlite3.connect('wallet.db')
     c = conn.cursor()
@@ -51,9 +52,9 @@ def add_balance(user_id, amount):
     conn.commit()
     conn.close()
 
-# ایجاد دکمه‌ها و منوها (منوی شیشه‌ای)
+# منوها و دکمه‌ها
 def create_main_menu():
-    keyboard = InlineKeyboardMarkup(row_width=2)  # دکمه‌ها را در دو ستون نمایش می‌دهیم
+    keyboard = InlineKeyboardMarkup(row_width=2)
     keyboard.add(
         InlineKeyboardButton("مشاهده موجودی", callback_data="balance"),
         InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance")
@@ -75,12 +76,15 @@ def create_admin_panel():
     keyboard.add(InlineKeyboardButton("درخواست‌های واریز", callback_data="view_deposit_requests"))
     return keyboard
 
-# دکمه شیشه‌ای برای پیوستن به کانال و بررسی عضویت
 def create_join_check_buttons():
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(InlineKeyboardButton("پیوستن به کانال", url=f"https://t.me/{channel_link}"))
     keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
     return keyboard
+
+# Webhook
+async def on_start():
+    await bot.set_webhook(WEBHOOK_URL)
 
 # شروع درخواست افزایش موجودی
 @dp.callback_query_handler(lambda c: c.data == "increase_balance")
@@ -190,7 +194,11 @@ async def reject_deposit(callback_query: types.CallbackQuery):
     conn.close()
     await callback_query.message.answer(f"درخواست واریز برای کاربر {user_id} رد شد.")
 
-# اجرای ربات
+# اجرای Webhook
+async def on_start():
+    await bot.set_webhook(WEBHOOK_URL)
+
+# اجرای ربات با Webhook
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
-    executor.start_polling(dp, skip_updates=True)
+    executor.start_webhook(dp, webhook_path='/webhook', on_startup=on_start)
