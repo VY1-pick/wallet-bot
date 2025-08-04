@@ -12,7 +12,7 @@ admin_main = []  # مدیران اصلی به صورت لیست
 admin_simple = []  # مدیران ساده به صورت لیست
 join_required = True  # جوین اجباری فعال است یا نه
 admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
-channel_link = '@Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
+channel_link = ''  # لینک کانال که اعضا باید به آن بپیوندند
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -52,12 +52,18 @@ def add_balance(user_id, amount):
 
 # ایجاد دکمه‌ها و منوها (منوی شیشه‌ای)
 def create_main_menu():
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.add(InlineKeyboardButton("مشاهده موجودی", callback_data="balance"))
-    keyboard.add(InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance"))
-    keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
-    keyboard.add(InlineKeyboardButton("پنل مدیریت", callback_data="admin_panel"))
-    keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
+    keyboard = InlineKeyboardMarkup(row_width=2)  # دکمه‌ها را در دو ستون نمایش می‌دهیم
+    keyboard.add(
+        InlineKeyboardButton("مشاهده موجودی", callback_data="balance"),
+        InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance")
+    )
+    keyboard.add(
+        InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"),
+        InlineKeyboardButton("پنل مدیریت", callback_data="admin_panel")
+    )
+    keyboard.add(
+        InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required")
+    )
     return keyboard
 
 def create_admin_panel():
@@ -67,10 +73,11 @@ def create_admin_panel():
     keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
     return keyboard
 
-# دکمه شیشه‌ای برای پیوستن به کانال
-def create_join_channel_button():
-    keyboard = InlineKeyboardMarkup()
+# دکمه شیشه‌ای برای پیوستن به کانال و بررسی عضویت
+def create_join_check_buttons():
+    keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(InlineKeyboardButton("پیوستن به کانال", url=f"https://t.me/{channel_link}"))
+    keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
     return keyboard
 
 # دستور شروع
@@ -79,11 +86,9 @@ async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     if join_required:
         if not await check_membership(user_id):
-            # نمایش دکمه شیشه‌ای برای عضویت
+            # نمایش دکمه شیشه‌ای برای عضویت و بررسی عضویت
             await message.answer(f"سلام {message.from_user.first_name} عزیز! \n\nبرای استفاده از ربات باید به کانال {channel_link} بپیوندید.", 
-                                 reply_markup=create_join_channel_button())
-            await message.answer("لطفاً به کانال ما بپیوندید و سپس از دکمه \"بررسی عضویت\" برای بررسی وضعیت عضویت استفاده کنید.", 
-                                 reply_markup=create_check_membership_button())
+                                 reply_markup=create_join_check_buttons())
             return
     if user_id in admin_main:
         await message.answer("سلام مدیر اصلی! خوش اومدی! به ربات کیف پول دیجیتال خوش آمدید.\nبرای دسترسی به پنل مدیریت از منوی زیر استفاده کن.", 
