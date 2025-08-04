@@ -13,7 +13,7 @@ admin_main = []  # مدیران اصلی
 admin_simple = []  # مدیران ساده
 join_required = True  # جوین اجباری
 admin_code = "SECRET_CODE"  # کد مدیر اصلی
-channel_link = '@Info_ResumeIt'  # لینک کانال شما
+channel_link = '@Info_Resumeit'  # لینک کانال شما
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -204,3 +204,4 @@ async def on_start(dispatcher: Dispatcher):
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
     executor.start_webhook(dp, webhook_path='/webhook', on_startup=on_start)
+
