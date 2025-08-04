@@ -8,12 +8,6 @@ import os
 
 # تنظیمات اولیه
 API_TOKEN = os.getenv('API_TOKEN')  # توکن ربات
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # آدرس Webhook
-admin_main = []  # مدیران اصلی
-admin_simple = []  # مدیران ساده
-join_required = True  # جوین اجباری
-admin_code = "SECRET_CODE"  # کد مدیر اصلی
-channel_link = '@Info_Resumeit'  # لینک کانال شما
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -78,14 +72,9 @@ def create_admin_panel():
 
 def create_join_check_buttons():
     keyboard = InlineKeyboardMarkup(row_width=1)
-    keyboard.add(InlineKeyboardButton("پیوستن به کانال", url=f"https://t.me/{channel_link}"))
+    keyboard.add(InlineKeyboardButton("پیوستن به کانال", url=f"https://t.me/Info_ResumeIt"))
     keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
     return keyboard
-
-# Webhook
-async def on_start(dispatcher: Dispatcher):
-    # تنظیم Webhook
-    await bot.set_webhook(WEBHOOK_URL)
 
 # شروع درخواست افزایش موجودی
 @dp.callback_query_handler(lambda c: c.data == "increase_balance")
@@ -195,13 +184,7 @@ async def reject_deposit(callback_query: types.CallbackQuery):
     conn.close()
     await callback_query.message.answer(f"درخواست واریز برای کاربر {user_id} رد شد.")
 
-# اجرای Webhook
-async def on_start(dispatcher: Dispatcher):
-    # اینجا از dispatcher استفاده می‌کنیم
-    await bot.set_webhook(WEBHOOK_URL)
-
-# اجرای ربات با Webhook
+# اجرای Polling
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
-    executor.start_webhook(dp, webhook_path='/webhook', on_startup=on_start)
-
+    executor.start_polling(dp, skip_updates=True)
