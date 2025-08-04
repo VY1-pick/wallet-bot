@@ -13,7 +13,7 @@ admin_main = []  # مدیران اصلی
 admin_simple = []  # مدیران ساده
 join_required = True  # جوین اجباری
 admin_code = "SECRET_CODE"  # کد مدیر اصلی
-channel_link = '@your_channel'  # لینک کانال
+channel_link = '@Info_ResumeIt'  # لینک کانال
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -83,7 +83,8 @@ def create_join_check_buttons():
     return keyboard
 
 # Webhook
-async def on_start():
+async def on_start(dispatcher: Dispatcher):
+    # تنظیم Webhook
     await bot.set_webhook(WEBHOOK_URL)
 
 # شروع درخواست افزایش موجودی
