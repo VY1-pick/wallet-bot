@@ -5,8 +5,6 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 import logging
 import os
-import random
-import string
 
 # تنظیمات اولیه
 API_TOKEN = os.getenv('API_TOKEN')  # متغیر محیطی توکن ربات
@@ -14,7 +12,7 @@ admin_main = []  # مدیران اصلی به صورت لیست
 admin_simple = []  # مدیران ساده به صورت لیست
 join_required = True  # جوین اجباری فعال است یا نه
 admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
-channel_link = '@Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
+channel_link = '@your_channel'  # لینک کانال که اعضا باید به آن بپیوندند
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -72,6 +70,12 @@ def create_check_membership_button():
     keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
     return keyboard
 
+# دکمه شیشه‌ای برای پیوستن به کانال
+def create_join_channel_button():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("پیوستن به کانال", url=f"https://t.me/{channel_link}"))
+    return keyboard
+
 # دستور شروع
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
@@ -79,12 +83,17 @@ async def cmd_start(message: types.Message):
     if join_required:
         if not await check_membership(user_id):
             # نمایش دکمه شیشه‌ای برای عضویت
-            await message.answer(f"برای استفاده از ربات باید به کانال {channel_link} بپیوندید.", reply_markup=create_check_membership_button())
+            await message.answer(f"سلام {message.from_user.first_name} عزیز! \n\nبرای استفاده از ربات باید به کانال {channel_link} بپیوندید.", 
+                                 reply_markup=create_join_channel_button())
+            await message.answer("لطفاً به کانال ما بپیوندید و سپس از دکمه \"بررسی عضویت\" برای بررسی وضعیت عضویت استفاده کنید.", 
+                                 reply_markup=create_check_membership_button())
             return
     if user_id in admin_main:
-        await message.answer("سلام مدیر اصلی! به ربات خوش آمدید.", reply_markup=create_admin_panel())
+        await message.answer("سلام مدیر اصلی! خوش اومدی! به ربات کیف پول دیجیتال خوش آمدید.\nبرای دسترسی به پنل مدیریت از منوی زیر استفاده کن.", 
+                             reply_markup=create_admin_panel())
     else:
-        await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.")
+        await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.", 
+                             reply_markup=create_main_menu())
 
 # بررسی عضویت کاربر در کانال
 async def check_membership(user_id):
@@ -182,4 +191,3 @@ async def increase_balance(callback_query: types.CallbackQuery):
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
     executor.start_polling(dp, skip_updates=True)
-
