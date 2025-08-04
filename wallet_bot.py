@@ -12,7 +12,7 @@ admin_main = []  # مدیران اصلی به صورت لیست
 admin_simple = []  # مدیران ساده به صورت لیست
 join_required = True  # جوین اجباری فعال است یا نه
 admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
-channel_link = 'Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
+channel_link = '@Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -50,11 +50,14 @@ def add_balance(user_id, amount):
     conn.commit()
     conn.close()
 
-# ایجاد دکمه‌ها و منوها
+# ایجاد دکمه‌ها و منوها (منوی شیشه‌ای)
 def create_main_menu():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("ثبت مدیر اصلی", callback_data="register_admin"))
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard.add(InlineKeyboardButton("مشاهده موجودی", callback_data="balance"))
+    keyboard.add(InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance"))
+    keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
     keyboard.add(InlineKeyboardButton("پنل مدیریت", callback_data="admin_panel"))
+    keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
     return keyboard
 
 def create_admin_panel():
@@ -62,12 +65,6 @@ def create_admin_panel():
     keyboard.add(InlineKeyboardButton("مدیران", callback_data="manage_admins"))
     keyboard.add(InlineKeyboardButton("افزایش موجودی", callback_data="increase_balance"))
     keyboard.add(InlineKeyboardButton("تنظیمات جوین اجباری", callback_data="set_join_required"))
-    return keyboard
-
-# دکمه شیشه‌ای برای بررسی عضویت
-def create_check_membership_button():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("بررسی عضویت", callback_data="check_membership"))
     return keyboard
 
 # دکمه شیشه‌ای برای پیوستن به کانال
@@ -92,7 +89,7 @@ async def cmd_start(message: types.Message):
         await message.answer("سلام مدیر اصلی! خوش اومدی! به ربات کیف پول دیجیتال خوش آمدید.\nبرای دسترسی به پنل مدیریت از منوی زیر استفاده کن.", 
                              reply_markup=create_admin_panel())
     else:
-        await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی از دستور /balance استفاده کن.", 
+        await message.answer("سلام! خوش اومدی به ربات کیف پول دیجیتال.\nبرای مشاهده موجودی و دسترسی به سایر امکانات از منوی زیر استفاده کن:", 
                              reply_markup=create_main_menu())
 
 # بررسی عضویت کاربر در کانال
@@ -191,4 +188,3 @@ async def increase_balance(callback_query: types.CallbackQuery):
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
     executor.start_polling(dp, skip_updates=True)
-
