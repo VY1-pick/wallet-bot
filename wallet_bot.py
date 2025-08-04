@@ -13,7 +13,7 @@ admin_main = []  # مدیران اصلی
 admin_simple = []  # مدیران ساده
 join_required = True  # جوین اجباری
 admin_code = "SECRET_CODE"  # کد مدیر اصلی
-channel_link = '@Info_ResumeIt'  # لینک کانال
+channel_link = '@Info_ResumeIt'  # لینک کانال شما
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -196,7 +196,8 @@ async def reject_deposit(callback_query: types.CallbackQuery):
     await callback_query.message.answer(f"درخواست واریز برای کاربر {user_id} رد شد.")
 
 # اجرای Webhook
-async def on_start():
+async def on_start(dispatcher: Dispatcher):
+    # اینجا از dispatcher استفاده می‌کنیم
     await bot.set_webhook(WEBHOOK_URL)
 
 # اجرای ربات با Webhook
