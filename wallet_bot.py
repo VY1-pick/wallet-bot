@@ -14,7 +14,7 @@ admin_main = []  # مدیران اصلی به صورت لیست
 admin_simple = []  # مدیران ساده به صورت لیست
 join_required = True  # جوین اجباری فعال است یا نه
 admin_code = "SECRET_CODE"  # کد مخفی برای مدیر اصلی
-channel_link = '@your_channel'  # لینک کانال که اعضا باید به آن بپیوندند
+channel_link = '@Info_ResumeIt'  # لینک کانال که اعضا باید به آن بپیوندند
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -182,3 +182,4 @@ async def increase_balance(callback_query: types.CallbackQuery):
 if __name__ == '__main__':
     create_db()  # ساخت دیتابیس
     executor.start_polling(dp, skip_updates=True)
+
