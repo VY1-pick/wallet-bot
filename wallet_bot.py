@@ -6,7 +6,8 @@ import logging
 import sys
 
 #from os import getenv
-from aiogram import Bot, Dispatcher, html
+from aiogram import Bot, Dispatcher
+from aiogram.utils import html
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
@@ -76,3 +77,4 @@ async def main() -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     asyncio.run(main())
+
